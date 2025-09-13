@@ -3,6 +3,7 @@
 Launcher for Hugging Face Spaces / Streamlit:
  - force XDG_CONFIG_HOME/HOME to a writable folder in the repo
  - create a minimal .streamlit/config.toml if missing
+ - add repo/src to sys.path so `from data_loader import ...` works
  - run the actual app (src/app.py) as __main__
 """
 import os
@@ -18,7 +19,7 @@ STREAMLIT_DIR = ROOT.joinpath(".streamlit")
 os.environ["XDG_CONFIG_HOME"] = str(STREAMLIT_DIR)
 # Ensure HOME is a writable folder inside the repo as well
 os.environ["HOME"] = str(ROOT)
-# Also set STREAMLIT_RUNTIME_DIR (added safety) and disable telemetry server writes
+# Also set STREAMLIT_RUNTIME_DIR (added safety)
 os.environ.setdefault("STREAMLIT_RUNTIME_DIR", str(ROOT.joinpath(".streamlit", "runtime")))
 
 # 2) Create .streamlit and a minimal config.toml if it doesn't exist
@@ -40,10 +41,17 @@ if not cfg.exists():
 runtime_dir = Path(os.environ.get("STREAMLIT_RUNTIME_DIR"))
 runtime_dir.mkdir(parents=True, exist_ok=True)
 
-# 3) Diagnostic print for logs (helps debug in Space logs)
+# --- ADD src directory to Python import path so app can import modules by name ---
+SRC_DIR = str(ROOT.joinpath("src"))
+if SRC_DIR not in sys.path:
+    # Insert at front so local src overrides other packages with same names
+    sys.path.insert(0, SRC_DIR)
+
+# 3) Diagnostic prints for logs (helps debug in Space logs)
 print("streamlit_app launcher: XDG_CONFIG_HOME =", os.environ.get("XDG_CONFIG_HOME"))
 print("streamlit_app launcher: HOME =", os.environ.get("HOME"))
 print("streamlit_app launcher: STREAMLIT_RUNTIME_DIR =", os.environ.get("STREAMLIT_RUNTIME_DIR"))
+print("streamlit_app launcher: sys.path[0] =", sys.path[0])
 sys.stdout.flush()
 
 # 4) Run your real Streamlit app script (runs as __main__)
