@@ -78,7 +78,6 @@ Pygments==2.18.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.1
 pytz==2025.2
-pywin32==308
 PyYAML==6.0.2
 pyzmq==26.2.0
 referencing==0.36.2
