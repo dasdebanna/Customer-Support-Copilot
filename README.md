@@ -121,7 +121,7 @@ Tickets flow through the classification pipeline and optionally into the RAG mod
   - Prompt refinements and stopping criteria reduce duplicates or rambling.
   - Trade-off: More controlled outputs, but risk of truncation if misconfigured.
 
-- Hugging Face Spaces (Optional)
+- Hugging Face Spaces
   - Simple public demo via containerized Streamlit app.
   - Trade-off: Convenience vs fine-grained infra control.
 
@@ -186,9 +186,7 @@ Tip:
 
 ---
 
-## 🌐 Live Demo (Optional)
-
-If you deploy on Hugging Face Spaces, add the link here:
+## 🌐 Live Demo
 
 👉 Customer Support Copilot on Hugging Face: <https://huggingface.co/spaces/Debanna/Customer-Support-Copilot>
 
@@ -243,29 +241,6 @@ If you change the scraping logic or source documentation:
 - `faiss_index.bin`
 
 Make sure the app points to the updated artifacts.
-
----
-
-## 🔐 Configuration (Optional)
-
-- OpenAI API
-  - If you choose to use OpenAI for generation, set:
-    - Linux/Mac: `export OPENAI_API_KEY=your_key`
-    - Windows (PowerShell): `$Env:OPENAI_API_KEY="your_key"`
-  - The app will fall back to local generation strategies if not configured (as applicable).
-
-- Proxies/Networking
-  - If you’re behind a corporate proxy, configure `HTTP_PROXY`/`HTTPS_PROXY` accordingly for model downloads.
-
----
-
-## 🛠️ Future Improvements
-
-- Fine-tuned classifier for Atlan-specific categories.
-- More advanced priority model.
-- Improved chunking strategies for long documents.
-- UI polish (conversation memory, better error handling).
-- Automated evaluation for RAG quality.
 
 ---
 
