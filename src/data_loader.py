@@ -11,6 +11,6 @@ def load_tickets(path: str = "../sample_tickets.json") -> List[Dict]:
 if __name__ == "__main__":
     tickets = load_tickets()
     print(f"Loaded {len(tickets)} tickets")
-    # show first ticket
+    
     import pprint
     pprint.pprint(tickets[0])

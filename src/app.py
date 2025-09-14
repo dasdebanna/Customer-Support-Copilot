@@ -1,4 +1,3 @@
-# src/app.py
 import streamlit as st
 import pandas as pd
 import json
@@ -6,15 +5,15 @@ from pathlib import Path
 from data_loader import load_tickets
 from classifier import classify_ticket, classify_all_and_save
 
-# NEW: import RAG handler
+
 try:
     from rag import handle_rag_query
 except Exception:
-    handle_rag_query = None  # we'll handle absence gracefully
+    handle_rag_query = None  
 
-# Config
+
 st.set_page_config(page_title="Atlan - Support Copilot (Phase 3)", layout="wide")
-ROOT = Path(__file__).parent.parent.resolve()   # project root
+ROOT = Path(__file__).parent.parent.resolve()   
 CLASSIFIED_PATH = ROOT.joinpath("classified_tickets_phase2.json")
 
 st.title("Atlan — Support Copilot (Phase 3)")
@@ -23,43 +22,43 @@ st.markdown(
     "This demo shows bulk classification and an interactive agent with RAG."
 )
 
-# Sidebar controls
+
 st.sidebar.header("Controls")
 use_saved = st.sidebar.checkbox("Load pre-saved classified file (if available)", value=True)
 run_classify_all = st.sidebar.button("Classify ALL tickets & Save (Phase 2)")
 reload_ui = st.sidebar.button("Reload UI")
 
-# NEW: RAG options in sidebar
+
 st.sidebar.markdown("### RAG options")
 use_openai = st.sidebar.checkbox("Use OpenAI for generation (if API key set)", value=False)
 top_k = st.sidebar.slider("RAG: number of passages to retrieve", min_value=1, max_value=10, value=5)
 
-# Safe reload: attempt API call, otherwise show instruction to refresh
+
 if reload_ui:
     try:
         st.experimental_rerun()
     except Exception:
         st.info("Automatic reload isn't supported by this Streamlit version. Please refresh the browser page to reload the UI.")
 
-# Load tickets (original) — call the loader without forcing a path so it uses its default
+
 try:
-    tickets = load_tickets()   # loader default = ../sample_tickets.json (project root)
+    tickets = load_tickets()   
 except Exception as e:
     st.error("Could not load sample tickets. Ensure sample_tickets.json exists at the project root (one level above src/).")
     st.exception(e)
     tickets = []
 
-# If user asked to classify all, run classification and save (uses classifier defaults)
+
 if run_classify_all:
     with st.spinner("Running classification on all tickets (models may load on first run)..."):
         try:
-            out_path = classify_all_and_save()  # defaults -> saves to ../classified_tickets_phase2.json
+            out_path = classify_all_and_save()  
             st.success(f"Classified and saved to: {out_path}")
         except Exception as e:
             st.error("Error during batch classification. See details below.")
             st.exception(e)
 
-# Try to load pre-saved classified file (if requested and exists)
+
 classified_data = None
 if use_saved and CLASSIFIED_PATH.exists():
     try:
@@ -75,7 +74,7 @@ with tab1:
     st.write("This view shows all tickets with their inferred topic tags, sentiment, and priority.")
 
     rows = []
-    # If we have pre-classified data, use that (faster). Otherwise classify on the fly.
+
     if classified_data:
         for entry in classified_data:
             c = entry.get("classification", {})
@@ -87,7 +86,7 @@ with tab1:
                 "priority": c.get("priority", ""),
             })
     else:
-        # Live classify (will call HF pipelines lazily)
+        
         with st.spinner("Classifying tickets (zero-shot)... this may take a few seconds on first run"):
             for t in tickets:
                 try:
@@ -104,7 +103,7 @@ with tab1:
                 })
 
     df = pd.DataFrame(rows)
-    # basic filters
+    
     cols = st.columns([2, 1, 1, 1])
     with cols[0]:
         q = st.text_input("Filter by subject/text contains")
@@ -128,11 +127,11 @@ with tab1:
     st.dataframe(df_display.reset_index(drop=True), use_container_width=True, height=420)
 
     st.markdown("### Sample ticket detail")
-    # choose ticket
+    
     ids = df_display["id"].tolist()
     if ids:
         sel = st.selectbox("Select ticket", ids)
-        # find original ticket object (from classified_data if present else from tickets)
+        
         selected_full = None
         if classified_data:
             selected_full = next((x for x in classified_data if x["id"] == sel), None)
@@ -144,7 +143,7 @@ with tab1:
         if selected_full and "classification" in selected_full:
             st.json(selected_full["classification"])
         else:
-            # classify on-the-fly for selected ticket if no classification exists
+            
             with st.spinner("Classifying selected ticket..."):
                 try:
                     c = classify_ticket(selected_full)
@@ -170,7 +169,7 @@ with tab2:
         if not user_input.strip():
             st.warning("Enter some ticket text to analyze.")
         else:
-            # Infer subject/body: first line = subject
+            
             lines = user_input.strip().split("\n")
             subject = lines[0]
             body = "\n".join(lines[1:]).strip() if len(lines) > 1 else user_input.strip()
@@ -187,17 +186,17 @@ with tab2:
             st.json(c)
 
             st.subheader("Final response (frontend view)")
-            # RAG-enabled topics
+            
             allowed_rag = {"How-to", "Product", "Best practices", "API/SDK", "SSO"}
 
-            # If ticket topic is RAG-enabled -> run RAG
+            
             if any(lbl in allowed_rag for lbl in c.get("topic_tags", [])):
                 if handle_rag_query is None:
                     st.error("RAG handler not found. Make sure src/rag.py exists and is importable.")
                 else:
                     st.info("RAG triggered — retrieving docs and generating an answer...")
                     with st.spinner("Retrieving + generating answer (may take a few seconds)..."):
-                        # Use the combined subject+body as the query
+                        
                         query_text = f"{subject}\n\n{body}"
                         try:
                             rag_res = handle_rag_query(query_text, top_k=top_k, use_openai=use_openai)

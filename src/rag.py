@@ -1,4 +1,3 @@
-# src/rag.py
 """
 RAG module (updated)
  - FAISS retrieval (sentence-transformers embeddings)
@@ -17,7 +16,7 @@ import os
 import faiss
 import re
 
-# embeddings & models
+
 from sentence_transformers import SentenceTransformer, CrossEncoder
 
 try:
@@ -25,36 +24,34 @@ try:
 except Exception:
     openai = None
 
-# local generator (transformers)
+
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
 
 ROOT = Path(__file__).parent.parent.resolve()
 INDEX_PATH = ROOT.joinpath("faiss_index.bin")
 META_PATH = ROOT.joinpath("docs_meta.jsonl")
 
-EMBED_MODEL = "all-MiniLM-L6-v2"          # embeddings model (fast)
-CROSS_ENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"  # reranker
+EMBED_MODEL = "all-MiniLM-L6-v2"         
+CROSS_ENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"  
 
-# local text generator model (CPU)
+
 LOCAL_GEN_MODEL = "google/flan-t5-small"
 
-# tune here: how many sentences to keep in final answer
+
 MAX_ANSWER_SENTENCES = 2
 
-# diversify: max chunks per url allowed in final top_candidates
+
 MAX_CHUNKS_PER_URL = 2
 
-# lazy-loaded resources
+
 _index = None
 _meta = None
 _embed_model = None
 _cross_encoder = None
 _local_generator = None
 
-# -------------------------
-# Utilities: sentence helpers & tidy answer
-# -------------------------
-RE_SENT_SPLIT = re.compile(r'([.!?])\s+')          # split and keep punctuation
+
+RE_SENT_SPLIT = re.compile(r'([.!?])\s+')          
 RE_ANGLE_PLACEHOLDER = re.compile(r"<[^>]{1,200}>")
 RE_DOUBLE_DASH_ID = re.compile(r"\b[a-zA-Z0-9_-]{3,}--\d{3,}\b")
 RE_MULTI_DOTS = re.compile(r"\.{2,}")
@@ -73,9 +70,7 @@ def split_into_sentences(text: str):
             sentences.append(sentence)
     return sentences
 
-# -------------------------
-# NEW: sentence-level extraction helpers with procedural handling
-# -------------------------
+
 def get_top_sentences_from_passage(passage_text: str, query: str, embed_model, top_n: int = 1):
     """
     Given a passage text, split into sentences and return top_n sentences by cosine similarity.
@@ -90,7 +85,7 @@ def get_top_sentences_from_passage(passage_text: str, query: str, embed_model, t
     if len(sents) <= top_n:
         return sents[:top_n]
 
-    # embed query + sentences
+    
     q_emb = embed_model.encode([query], convert_to_numpy=True)
     s_embs = embed_model.encode(sents, convert_to_numpy=True)
 
@@ -101,16 +96,16 @@ def get_top_sentences_from_passage(passage_text: str, query: str, embed_model, t
     sims = [float(np.dot(qn, norm(se))) for se in s_embs]
     idxs = sorted(range(len(sents)), key=lambda i: sims[i], reverse=True)[:top_n]
 
-    # if top sentence looks like a header/menu (very short, contains 'how to' or ends with ':'), also include the next sentence
+    
     out = []
     for idx in idxs:
         out.append(sents[idx])
-        # heuristic: if that sentence is short or contains "how to" or looks like heading, add next sentence if exists
+        
         s = sents[idx].lower()
         word_count = len(s.split())
         if (word_count <= 6 or 'how to' in s or s.endswith(':')) and (idx + 1) < len(sents):
             out.append(sents[idx+1])
-    # dedupe while preserving order
+    
     seen = set()
     final = []
     for x in out:
@@ -167,9 +162,7 @@ def tidy_answer(ans: str, max_sentences: int = MAX_ANSWER_SENTENCES) -> str:
         out = out.rstrip(" .,") + "."
     return out
 
-# -------------------------
-# Loading helpers
-# -------------------------
+
 def load_index_and_meta():
     global _index, _meta, _embed_model
     if _index is None:
@@ -198,9 +191,7 @@ def get_local_generator():
         _local_generator = pipeline("text2text-generation", model=model, tokenizer=tok, device=-1)
     return _local_generator
 
-# -------------------------
-# Embedding + retrieval
-# -------------------------
+
 def embed_query(q: str):
     _, _, em = load_index_and_meta()
     emb = em.encode(q)
@@ -224,9 +215,7 @@ def retrieve_candidates(query: str, top_k: int = 50):
         results.append({"score": float(score), "url": m["url"], "title": m.get("title",""), "text": m["text"], "id": idx})
     return results
 
-# -------------------------
-# Reranking
-# -------------------------
+
 def rerank_with_cross(query: str, candidates: list, top_n: int = 5):
     if not candidates:
         return []
@@ -235,7 +224,7 @@ def rerank_with_cross(query: str, candidates: list, top_n: int = 5):
     try:
         scores = cross.predict(inputs)
     except Exception as e:
-        # fallback: if cross encoder fails, return top_n by original score
+        
         candidates.sort(key=lambda x: x.get("score",0), reverse=True)
         return candidates[:top_n]
     for c, s in zip(candidates, scores):
@@ -243,9 +232,7 @@ def rerank_with_cross(query: str, candidates: list, top_n: int = 5):
     candidates.sort(key=lambda x: x["rerank_score"], reverse=True)
     return candidates[:top_n]
 
-# -------------------------
-# Snippet trimming helpers
-# -------------------------
+
 def trim_snippet_to_sentence(snippet: str, max_chars: int = 800) -> str:
     if not snippet:
         return snippet
@@ -259,9 +246,7 @@ def trim_snippet_to_sentence(snippet: str, max_chars: int = 800) -> str:
     cut = head.rsplit(" ", 1)[0]
     return cut.strip()
 
-# -------------------------
-# Prompt template (stronger)
-# -------------------------
+
 def build_prompt(query: str, contexts: list, sentences_per_context: int = 1):
     """
     Build a prompt that is explicit about producing an ACTIONABLE, concise answer.
@@ -293,13 +278,11 @@ def build_prompt(query: str, contexts: list, sentences_per_context: int = 1):
     """).strip()
     return prompt
 
-# -------------------------
-# Generation (OpenAI or local) with fallback formatting
-# -------------------------
+
 def generate_answer_with_context(question: str, contexts: list, use_openai: bool = False):
     prompt = build_prompt(question, contexts, sentences_per_context=1)
 
-    # Option A: OpenAI (preferred)
+    
     if use_openai and openai is not None and os.environ.get("OPENAI_API_KEY"):
         try:
             resp = openai.ChatCompletion.create(
@@ -314,7 +297,7 @@ def generate_answer_with_context(question: str, contexts: list, use_openai: bool
             )
             raw_answer = resp["choices"][0]["message"]["content"].strip()
             answer = tidy_answer(raw_answer, max_sentences=MAX_ANSWER_SENTENCES)
-            # fallback if model returned unhelpful phrasing
+            
             if answer.lower().startswith("i'm") or "find the source" in answer.lower() or answer.lower().startswith("see"):
                 fallback = extract_fallback_from_contexts(contexts, question)
                 fallback = fallback.strip()
@@ -330,7 +313,7 @@ def generate_answer_with_context(question: str, contexts: list, use_openai: bool
         except Exception as e:
             print("OpenAI generation failed:", e)
 
-    # Option B: Local generator fallback
+    
     gen = get_local_generator()
     gen_kwargs = {
         "max_length": 200,
@@ -352,9 +335,7 @@ def generate_answer_with_context(question: str, contexts: list, use_openai: bool
         return tidy_answer(fallback, max_sentences=MAX_ANSWER_SENTENCES), [c["url"] for c in contexts]
     return answer, [c["url"] for c in contexts]
 
-# -------------------------
-# Top-level handler with dedup/diversify
-# -------------------------
+
 def handle_rag_query(query: str, top_k: int = 5, use_openai: bool = False, rerank_candidates: int = 50):
     candidates = retrieve_candidates(query, top_k=rerank_candidates)
     if not candidates:
@@ -366,9 +347,7 @@ def handle_rag_query(query: str, top_k: int = 5, use_openai: bool = False, reran
         print("Reranker failed, falling back to FAISS order:", e)
         top_candidates = candidates[:rerank_candidates]
 
-    # Now pick final top_k diversified by URL:
-    # strategy: prefer at most MAX_CHUNKS_PER_URL per url; prefer higher rerank_score
-    # first, group by URL preserving order
+
     url_counts = {}
     diversified = []
     for c in top_candidates:
@@ -377,11 +356,11 @@ def handle_rag_query(query: str, top_k: int = 5, use_openai: bool = False, reran
         if cnt < MAX_CHUNKS_PER_URL:
             diversified.append(c)
             url_counts[url] = cnt + 1
-        # stop early if we have enough
+        
         if len(diversified) >= max(top_k, len(top_candidates)):
             break
 
-    # final trimming: ensure at most one chunk per URL until we fill top_k
+    
     seen_urls = set()
     unique_candidates = []
     for c in diversified:
@@ -392,9 +371,9 @@ def handle_rag_query(query: str, top_k: int = 5, use_openai: bool = False, reran
         seen_urls.add(u)
         if len(unique_candidates) >= top_k:
             break
-    # if we don't have enough unique URLs, allow second chunks (already in diversified)
+    
     if len(unique_candidates) < top_k:
-        # fill from diversified preserving order but skipping already selected items
+        
         for c in diversified:
             if c in unique_candidates:
                 continue
@@ -403,12 +382,12 @@ def handle_rag_query(query: str, top_k: int = 5, use_openai: bool = False, reran
                 break
     final_candidates = unique_candidates[:top_k]
 
-    # generate answer using final candidates
+    
     answer, urls = generate_answer_with_context(query, final_candidates, use_openai=use_openai)
 
     return {"answer": answer, "sources": urls, "retrieved": final_candidates}
 
-# small test if run as script
+
 if __name__ == "__main__":
     q = "How do I configure SAML SSO with Okta?"
     print("Running test query:", q)

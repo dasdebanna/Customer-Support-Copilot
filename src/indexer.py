@@ -1,4 +1,3 @@
-# src/indexer.py
 """
 Index the cleaned corpus into FAISS using sentence-level/small-chunk passages.
 
@@ -19,7 +18,7 @@ META_PATH = Path(__file__).parent.parent.joinpath("docs_meta.jsonl")
 INDEX_PATH = Path(__file__).parent.parent.joinpath("faiss_index.bin")
 EMBED_MODEL = "all-MiniLM-L6-v2"
 
-# chunking by sentences, group up to N sentences per chunk (1-3 recommended)
+
 MAX_SENTENCES_PER_CHUNK = 2
 
 SENT_SPLIT_RE = re.compile(r'([.!?])\s+')
@@ -46,7 +45,7 @@ def build_index():
     meta = []
     idx = 0
 
-    # read corpus and chunk into sentence groups
+    
     with CORPUS_PATH.open("r", encoding="utf-8") as f:
         for line in tqdm(f, desc="Reading corpus"):
             doc = json.loads(line)
@@ -56,7 +55,7 @@ def build_index():
             sents = split_into_sentences(text)
             if not sents:
                 continue
-            # group sentences into small chunks (1..MAX_SENTENCES_PER_CHUNK)
+            
             i = 0
             while i < len(sents):
                 chunk_sents = sents[i:i+MAX_SENTENCES_PER_CHUNK]
@@ -69,7 +68,7 @@ def build_index():
     if not meta:
         raise RuntimeError("No chunks created from corpus (empty corpus?)")
 
-    # encode in batches for memory efficiency
+    
     texts = [m["text"] for m in meta]
     batch_size = 64
     all_embs = []
@@ -79,7 +78,7 @@ def build_index():
         all_embs.append(embs)
     embeddings = np.vstack(all_embs).astype("float32")
 
-    # normalize to use inner-product as cosine
+    
     faiss.normalize_L2(embeddings)
     d = embeddings.shape[1]
     index = faiss.IndexFlatIP(d)
